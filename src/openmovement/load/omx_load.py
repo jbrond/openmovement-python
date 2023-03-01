@@ -704,7 +704,7 @@ class OmxData(BaseData):
             self.fh = None
 
 
-    def get_sample_values(self):
+    def get_temperature_values(self):
         """
         Get the sample values as a single ndarray.
 
@@ -773,7 +773,7 @@ def _export(omx_data, filename):
 def main():
     filename = '../../../_local/data/sample.omx'
     with OmxData(filename, verbose=True, include_gyro=False, include_temperature=True) as omx_data:
-        sample_values = omx_data.get_sample_values()
+        sample_values = omx_data.get_temperature_values()
         samples = omx_data.get_samples()
         
     print(sample_values)

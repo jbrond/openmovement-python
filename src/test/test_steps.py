@@ -205,7 +205,7 @@ def testSteps(sourceFile, expectedSteps):
 
     print('LOADING: ' + sourceFile)
     with multi_load.MultiData(sourceFile) as data:
-        timedXYZ = data.get_sample_values()
+        timedXYZ = data.get_temperature_values()
         fs = data.get_sample_rate()
         print('SOURCE-RATE: ' + str(fs))
 

@@ -250,7 +250,7 @@ class CsvData(BaseData):
             self.fh.close()
             self.fh = None
 
-    def get_sample_values(self):
+    def get_temperature_values(self):
         """
         Get the sample values as a single ndarray.
 
@@ -310,7 +310,7 @@ def main():
     #filename = '../../../_local/data/mixed_wear.csv'
 
     with CsvData(filename, verbose=True) as csv_data:
-        sample_values = csv_data.get_sample_values()
+        sample_values = csv_data.get_temperature_values()
         samples = csv_data.get_samples()
         pass
 

@@ -13,7 +13,7 @@ def run_sensors(source_file):
     ext = '.sensors.csv'
 
     with MultiData(source_file, verbose=True, include_gyro=False, include_light=True, include_temperature=True) as data:
-        samples = data.get_sample_values()
+        samples = data.get_temperature_values()
     
     print(samples)
 

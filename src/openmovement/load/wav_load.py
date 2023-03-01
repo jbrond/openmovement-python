@@ -384,6 +384,12 @@ class WavData(BaseData):
             if self.verbose: print('Temperature creation...', flush=True)
             self.sample_values[:, current_axis] = (self.raw_samples[:, self.info['aux_axis']])
             self.labels = self.labels + ['aux_axis']
+            tempvals = range(2, len(self.sample_values[:, current_axis]), self.get_sample_rate())
+            # temp = (double(bitand(1023,data(3:sf:end,auxch))).*75000/256-50000)./1000;
+            temp = np.array(self.sample_values[tempvals, current_axis])
+            self.temperature = ((np.bitwise_and(temp.astype(int), 1023)) * 75000 / 256 - 50000) / 1000
+            # Fixing the problem with the first 10-12 seconds data
+            self.temperature[0:11] = self.temperature[12]
             current_axis += 1
 
         del self.raw_samples
@@ -452,6 +458,16 @@ class WavData(BaseData):
         self._ensure_all_data_read()
         return self.sample_values
 
+    def get_temperature_values(self):
+        """
+        Get the temperature values as a single ndarray.
+
+        :returns: An ndarray of (temperature)
+                  where 'time' is in seconds since the epoch.
+        """
+        self._ensure_all_data_read()
+        return self.temperature
+
     def get_samples(self, use_datetime64=True):
         """
         Return an DataFrame for (time, accel_x, accel_y, accel_z) or (time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
@@ -495,7 +511,7 @@ def main():
     #filename = '../../../_local/data/sample.wav'
 
     with WavData(filename, verbose=True, include_gyro=True) as wav_data:
-        sample_values = wav_data.get_sample_values()
+        sample_values = wav_data.get_temperature_values()
         samples = wav_data.get_samples()
 
     print(sample_values)

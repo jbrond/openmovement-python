@@ -14,7 +14,7 @@ def run_svm(source_file):
     ext = '.csvm.csv'
 
     with MultiData(source_file, verbose=True, include_gyro=False, include_temperature=False) as data:
-        samples = data.get_sample_values()
+        samples = data.get_temperature_values()
     
     svm_calc = calc_svm.calculate_svm(samples)
     

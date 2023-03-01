@@ -14,7 +14,7 @@ def run_wtv(source_file):
     ext = '.cwtv.csv'
 
     with MultiData(source_file, verbose=True, include_gyro=False, include_temperature=False) as data:
-        samples = data.get_sample_values()
+        samples = data.get_temperature_values()
     
     wtv_calc = calc_wtv.calculate_wtv(samples)
     

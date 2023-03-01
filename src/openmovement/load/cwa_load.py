@@ -644,6 +644,7 @@ class CwaData(BaseData):
             self.sample_values[:,current_axis] = np.interp(np.arange(0, self.df.shape[0] * self.data_format['sampleCount']), self.df['sample_index'], (self.df['temperature'] & 0x3ff) * (75.0 / 256) - 50)
             self.labels = self.labels + ['temperature']
             current_axis += 1
+
         
         del self.raw_samples
         self.samples = None
@@ -720,15 +721,6 @@ class CwaData(BaseData):
             self.fh = None
 
 
-    def get_sample_values(self):
-        """
-        Get the sample values as a single ndarray.
-
-        :returns: An ndarray of (time, accel_x, accel_y, accel_z) or (time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
-                  where 'time' is in seconds since the epoch.
-        """
-        self._ensure_all_data_read()
-        return self.sample_values
 
     def get_samples(self, use_datetime64=True):
         """
@@ -795,7 +787,7 @@ def main():
     #filename = '../../../_local/data/AX6-Static-8-Day.cwa'
     #filename = '../../../_local/data/longitudinal_data.cwa'
     with CwaData(filename, verbose=True, include_gyro=False, include_temperature=True) as cwa_data:
-        sample_values = cwa_data.get_sample_values()
+        sample_values = cwa_data.get_temperature_values()
         samples = cwa_data.get_samples()
         
     print(sample_values)

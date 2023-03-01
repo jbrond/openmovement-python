@@ -156,7 +156,7 @@ def main():
     filename = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', filename))
 
     with cwa_load.CwaData(filename, verbose=True, include_gyro=False, include_temperature=True) as cwa_data:
-        sample_values = cwa_data.get_sample_values()    # time,accel_x,accel_y,accel_z,*_,temperature
+        sample_values = cwa_data.get_temperature_values()  # time,accel_x,accel_y,accel_z,*_,temperature
 
         samples = sample_values[:,1:4]
         temperature = sample_values[:,-1]

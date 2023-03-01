@@ -25,7 +25,7 @@ from openmovement.load import CwaData
 filename = 'cwa-data.cwa'
 with CwaData(filename, include_gyro=False, include_temperature=True) as cwa_data:
     # As an ndarray of [time,accel_x,accel_y,accel_z,temperature]
-    sample_values = cwa_data.get_sample_values()
+    sample_values = cwa_data.get_temperature_values()
     # As a pandas DataFrame
     samples = cwa_data.get_samples()
 ```
@@ -101,7 +101,7 @@ from openmovement.process import calc_svm
 
 filename = 'cwa-data.cwa'
 with MultiData(filename) as data:
-    samples = data.get_sample_values()
+    samples = data.get_temperature_values()
 
 svm_calc = calc_svm.calculate_svm(samples)
 ```
@@ -119,7 +119,7 @@ from openmovement.process import calc_wtv
 
 filename = 'cwa-data.cwa'
 with MultiData(filename) as data:
-    samples = data.get_sample_values()
+    samples = data.get_temperature_values()
 
 wtv_calc = calc_wtv.calculate_wtv(samples)
 ```
