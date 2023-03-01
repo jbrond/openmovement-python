@@ -344,6 +344,8 @@ class WavData(BaseData):
         if has_accel: axis_count += 3
         if has_gyro: axis_count += 3
         if has_mag: axis_count += 3
+        #Adding the temperature
+        if self.include_temperature: axis_count += 1
         self.labels = []
 
         if self.verbose: print('Create output...', flush=True)
@@ -377,6 +379,11 @@ class WavData(BaseData):
             self.labels = self.labels + ['mag_x', 'mag_y', 'mag_z']
             current_axis += 3
 
+        if self.include_temperature:
+            # Extract temperature
+            if self.verbose: print('Temperature create...', flush=True)
+            self.sample_values[:, current_axis] = (self.raw_samples[:, self.info['aux_axis']])
+
         del self.raw_samples
         self.samples = None
         if self.verbose: print('Interpreted data', flush=True)
@@ -385,7 +392,7 @@ class WavData(BaseData):
             raise Exception('Internal error: not all output axes accounted for')
 
 
-    def __init__(self, filename, verbose=False, include_time=True, include_accel=True, include_gyro=True, include_mag=True):
+    def __init__(self, filename, verbose=False, include_time=True, include_accel=True, include_gyro=True, include_mag=True, include_temperature=True):
         """
         Construct a timeseries movement data object from a multi-channel .WAV file (with metadata for channel scaling).
 
@@ -402,6 +409,7 @@ class WavData(BaseData):
         self.include_accel = include_accel
         self.include_gyro = include_gyro
         self.include_mag = include_mag
+        self.include_temperature = include_temperature
 
         self.fh = None
         self.full_buffer = None
