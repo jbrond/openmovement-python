@@ -381,8 +381,10 @@ class WavData(BaseData):
 
         if self.include_temperature:
             # Extract temperature
-            if self.verbose: print('Temperature create...', flush=True)
+            if self.verbose: print('Temperature creation...', flush=True)
             self.sample_values[:, current_axis] = (self.raw_samples[:, self.info['aux_axis']])
+            self.labels = self.labels + ['aux_axis']
+            current_axis += 1
 
         del self.raw_samples
         self.samples = None
