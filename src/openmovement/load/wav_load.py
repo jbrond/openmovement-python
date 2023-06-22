@@ -364,6 +364,7 @@ class WavData(BaseData):
         if has_accel:
             if self.verbose: print('Sample data: scaling accel... ' + str(self.info['accel_scale']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = (self.raw_samples[:, self.info['accel_axis']:self.info['accel_axis']+3] + self.info['global_offset']) / self.info['global_range'] * self.info['accel_scale']
+            #self.sample_values[:, current_axis:current_axis + 3] = (self.raw_samples[:, self.info['accel_axis']:self.info['accel_axis'] + 3])
             self.labels = self.labels + ['accel_x', 'accel_y', 'accel_z']
             current_axis += 3
 
@@ -502,6 +503,15 @@ class WavData(BaseData):
     
     def get_num_samples(self):
         return self.info['num_samples']
+
+    def get_global_range(self):
+        return self.info['global_range']
+
+    def get_global_offset(self):
+        return self.info['global_offset']
+
+    def get_scale(self):
+        return self.info['accel_scale']
 
 
 

@@ -721,6 +721,25 @@ class CwaData(BaseData):
             self.fh = None
 
 
+    def get_sample_values(self):
+        """
+        Get the sample values as a single ndarray.
+
+        :returns: An ndarray of (time, accel_x, accel_y, accel_z) or (time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
+                  where 'time' is in seconds since the epoch.
+        """
+        self._ensure_all_data_read()
+        return self.sample_values
+
+    def get_temperature_values(self):
+        """
+        Get the temperature values as a single ndarray.
+
+        :returns: An ndarray of (temperature)
+                  where 'time' is in seconds since the epoch.
+        """
+        self._ensure_all_data_read()
+        return self.temperature
 
     def get_samples(self, use_datetime64=True):
         """
