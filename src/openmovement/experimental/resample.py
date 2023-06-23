@@ -3,16 +3,6 @@ import numpy as np
 # import pandas as pd
 import scipy
 
-# --- HACK: Allow this to run standalone as specified by a file in the repo (rather than only through the module)
-if __name__ == '__main__' and __package__ is None:
-    import sys;
-    import os;
-
-    sys.path.append(os.path.normpath(
-        os.path.join(os.path.dirname(os.path.realpath(os.path.join(os.getcwd(), os.path.expanduser(__file__)))), '..',
-                     '..')))
-# ---
-
 from openmovement.process.filter import filter
 
 
