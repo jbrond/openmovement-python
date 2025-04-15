@@ -48,7 +48,8 @@ def _parse_wav_info(buffer):
             raise Exception('Seemingly invalid chunk type')
 
         if ofs + chunk_size > riff_size:
-            raise Exception('Chunk size is invalid: ' + str(chunk_size))
+            #raise Exception('Chunk size is invalid: ' + str(chunk_size))
+            print('WARNING: Chunk size is invalid: ' + str(chunk_size))
 
         if chunk == b'fmt ':
             if chunk_size < 16:
@@ -217,16 +218,6 @@ def _parse_accel_info(wav_info):
     info['sample_span'] = info['num_channels'] * info['channel_span']
     info['num_samples'] = info['data_size'] // info['sample_span']
 
-    ## Find time-offset from creation date (timestamp of first sample)
-    info['time_offset'] = 0
-    info['time_offset_datetime'] = None
-    if wav_info['creation'] is not None:
-        try:
-            info['time_offset_datetime'] = datetime.datetime.fromisoformat(wav_info['creation'].decode('ascii') + '+00:00')
-            info['time_offset'] = info['time_offset_datetime'].timestamp()
-        except Exception as e:
-            print('WARNING: Problem parsing timestamp: ' + str(wav_info['creation']) + ' -- ' + str(e))
-
     # (INAM) name: Track title (data about the recording itself)
     info['recording'] = _decode_comment(wav_info['name'])
     
@@ -235,6 +226,27 @@ def _parse_accel_info(wav_info):
 
     # (ICMT) comment: Comments (data about this file representation)
     info['representation'] = _decode_comment(wav_info['comment'])
+
+    ## Find time-offset from creation date (timestamp of first sample)
+    info['time_offset'] = 0
+    info['time_offset_datetime'] = None
+    if wav_info['creation'] is not None:
+        try:
+            #info['time_offset_datetime'] = datetime.datetime.fromisoformat(wav_info['creation'].decode('ascii') + '+00:00')
+            # Specify the format of the datetime string
+            datetime_format = "%Y-%m-%d %H:%M:%S.%f"
+
+            
+            fourth_element_value = info['recording']['Start']    
+
+            # Parse the datetime string using the specified format
+            info['time_offset_datetime'] = datetime.datetime.strptime(fourth_element_value, datetime_format)
+
+            info['time_offset'] = info['time_offset_datetime'].timestamp()
+        except Exception as e:
+            print('WARNING: Problem parsing timestamp: ' + str(wav_info['creation']) + ' -- ' + str(e))
+
+    
 
     # Empty axis allocation and scaling
     info['scale'] = [1] * info['num_channels']

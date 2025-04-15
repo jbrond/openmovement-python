@@ -78,6 +78,7 @@ def _checksum(data):
 
 def _dword_unpack(value):
     """Unpack a single DWORD-packed triaxial value"""
+    # if using 0x3ff we include the leas significant bit with 0x3fe its excluded
     # eezzzzzz zzzzyyyy yyyyyyxx xxxxxxxx
     exponent = value >> 30
     x = ((((value      ) & 0x3ff) ^ 0x0200) - 0x0200) << exponent
@@ -637,6 +638,7 @@ class CwaData(BaseData):
         if self.has_accel:
             if self.verbose: print('Sample data: scaling accel... 1/' + str(self.data_format['accelUnit']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = self.raw_samples[:, self.data_format['accelAxis']:self.data_format['accelAxis']+3] * (1.0 / self.data_format['accelUnit'])
+            
             self.labels = self.labels + ['accel_x', 'accel_y', 'accel_z']
             current_axis += 3
 
