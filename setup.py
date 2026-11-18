@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='openmovement-python',
-    version='0.0.2',
+    version='0.0.4',
     packages=['src', 'src.openmovement', 'src.openmovement.load', 'src.openmovement.process',
               'src.openmovement.experimental'],
     url='',
