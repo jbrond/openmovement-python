@@ -65,6 +65,18 @@ class CsvData(BaseData):
     All other columns must be numeric.
     """
 
+    def _read_data(self):
+        if self.verbose: print('Opening CSV file...', flush=True)
+        self.fh = open(self.filename, 'rb')
+        try:
+            import mmap
+            self.full_buffer = mmap.mmap(self.fh.fileno(), 0, access=mmap.ACCESS_READ)
+            if self.verbose: print('...mapped ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+        except Exception as e:
+            print('WARNING: Problem using mmap (' + str(e) +') - falling back to reading whole file...', flush=True)
+            self.full_buffer = self.fh.read()
+            if self.verbose: print('...read ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+
     def _parse_header(self):
         if self.verbose: print('Parsing header...', flush=True)
 
@@ -238,7 +250,7 @@ class CsvData(BaseData):
             self.fh.close()
             self.fh = None
 
-    def get_sample_values(self):
+    def get_temperature_values(self):
         """
         Get the sample values as a single ndarray.
 
@@ -298,7 +310,7 @@ def main():
     #filename = '../../../_local/data/mixed_wear.csv'
 
     with CsvData(filename, verbose=True) as csv_data:
-        sample_values = csv_data.get_sample_values()
+        sample_values = csv_data.get_temperature_values()
         samples = csv_data.get_samples()
         pass
 

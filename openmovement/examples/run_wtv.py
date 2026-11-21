@@ -8,22 +8,22 @@ import sys
 import datetime
 
 from openmovement.load import MultiData
-from openmovement.process import calc_svm
+from openmovement.process import calc_wtv
 
-def run_svm(source_file):
-    ext = '.csvm.csv'
+def run_wtv(source_file):
+    ext = '.cwtv.csv'
 
     with MultiData(source_file, verbose=True, include_gyro=False, include_temperature=False) as data:
-        samples = data.get_sample_values()
+        samples = data.get_temperature_values()
     
-    svm_calc = calc_svm.calculate_svm(samples)
+    wtv_calc = calc_wtv.calculate_wtv(samples)
     
     output_file = os.path.splitext(source_file)[0] + ext
     with open(output_file, 'w') as writer:
-        writer.write("Time,Mean SVM (g)\n")
-        for time, svm in svm_calc:
+        writer.write("Time,Wear time (30 mins)\n")
+        for time, wtv in wtv_calc:
             time_string = datetime.datetime.fromtimestamp(time, tz=datetime.timezone.utc).isoformat(sep=' ')[0:19]
-            line = time_string + "," + str(svm)
+            line = time_string + "," + str(int(wtv))
             writer.write(line + "\n")
 
             print(line)
@@ -44,4 +44,4 @@ if __name__ == "__main__":
         print('No input file specified.')
     else:
         for file in source_files:
-            run_svm(file)
+            run_wtv(file)

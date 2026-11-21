@@ -68,8 +68,8 @@ class MultiData(BaseData):
                 self.potentially_zipped_file.__exit__(None, None, None)
                 self.potentially_zipped_file = None
 
-    def get_sample_values(self):
-        return self.inner_data.get_sample_values()
+    def get_temperature_values(self):
+        return self.inner_data.get_temperature_values()
 
     def get_samples(self, use_datetime64=True):
         return self.inner_data.get_samples(use_datetime64)
@@ -88,7 +88,7 @@ def main():
     filename = '../_local/data/mixed_wear.cwa'
 
     with MultiData(filename, verbose=True) as data:
-        sample_values = data.get_sample_values()
+        sample_values = data.get_temperature_values()
         samples = data.get_samples()
         
     print(sample_values)

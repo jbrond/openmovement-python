@@ -411,6 +411,19 @@ class OmxData(BaseData):
     OMX file loader
     """
 
+    def _read_data(self):
+        if self.verbose: print('Opening OMX file...', flush=True)
+        self.fh = open(self.filename, 'rb')
+        try:
+            import mmap
+            self.full_buffer = mmap.mmap(self.fh.fileno(), 0, access=mmap.ACCESS_READ)
+            if self.verbose: print('...mapped ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+        except Exception as e:
+            print('WARNING: Problem using mmap (' + str(e) +') - falling back to reading whole file...', flush=True)
+            self.full_buffer = self.fh.read()
+            if self.verbose: print('...read ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+
+
     def _parse_header(self):
         if self.verbose: print('Parsing header...', flush=True)
         self.header = _parse_omx_header(self.full_buffer)
@@ -653,6 +666,7 @@ class OmxData(BaseData):
         self.include_temperature = include_temperature
 
         self.fh = None
+        self.full_buffer = None
 
         self.all_data_read = False
         self._read_data()
@@ -690,7 +704,7 @@ class OmxData(BaseData):
             self.fh = None
 
 
-    def get_sample_values(self):
+    def get_temperature_values(self):
         """
         Get the sample values as a single ndarray.
 
@@ -759,7 +773,7 @@ def _export(omx_data, filename):
 def main():
     filename = '../../../_local/data/sample.omx'
     with OmxData(filename, verbose=True, include_gyro=False, include_temperature=True) as omx_data:
-        sample_values = omx_data.get_sample_values()
+        sample_values = omx_data.get_temperature_values()
         samples = omx_data.get_samples()
         
     print(sample_values)

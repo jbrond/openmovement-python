@@ -48,8 +48,7 @@ def _parse_wav_info(buffer):
             raise Exception('Seemingly invalid chunk type')
 
         if ofs + chunk_size > riff_size:
-            #raise Exception('Chunk size is invalid: ' + str(chunk_size))
-            print('WARNING: Chunk size is invalid: ' + str(chunk_size))
+            raise Exception('Chunk size is invalid: ' + str(chunk_size))
 
         if chunk == b'fmt ':
             if chunk_size < 16:
@@ -218,6 +217,16 @@ def _parse_accel_info(wav_info):
     info['sample_span'] = info['num_channels'] * info['channel_span']
     info['num_samples'] = info['data_size'] // info['sample_span']
 
+    ## Find time-offset from creation date (timestamp of first sample)
+    info['time_offset'] = 0
+    info['time_offset_datetime'] = None
+    if wav_info['creation'] is not None:
+        try:
+            info['time_offset_datetime'] = datetime.datetime.fromisoformat(wav_info['creation'].decode('ascii') + '+00:00')
+            info['time_offset'] = info['time_offset_datetime'].timestamp()
+        except Exception as e:
+            print('WARNING: Problem parsing timestamp: ' + str(wav_info['creation']) + ' -- ' + str(e))
+
     # (INAM) name: Track title (data about the recording itself)
     info['recording'] = _decode_comment(wav_info['name'])
     
@@ -226,27 +235,6 @@ def _parse_accel_info(wav_info):
 
     # (ICMT) comment: Comments (data about this file representation)
     info['representation'] = _decode_comment(wav_info['comment'])
-
-    ## Find time-offset from creation date (timestamp of first sample)
-    info['time_offset'] = 0
-    info['time_offset_datetime'] = None
-    if wav_info['creation'] is not None:
-        try:
-            #info['time_offset_datetime'] = datetime.datetime.fromisoformat(wav_info['creation'].decode('ascii') + '+00:00')
-            # Specify the format of the datetime string
-            datetime_format = "%Y-%m-%d %H:%M:%S.%f"
-
-            
-            fourth_element_value = info['recording']['Start']    
-
-            # Parse the datetime string using the specified format
-            info['time_offset_datetime'] = datetime.datetime.strptime(fourth_element_value, datetime_format)
-
-            info['time_offset'] = info['time_offset_datetime'].timestamp()
-        except Exception as e:
-            print('WARNING: Problem parsing timestamp: ' + str(wav_info['creation']) + ' -- ' + str(e))
-
-    
 
     # Empty axis allocation and scaling
     info['scale'] = [1] * info['num_channels']
@@ -319,6 +307,19 @@ class WavData(BaseData):
     WAV file loader
     """
 
+    def _read_data(self):
+        if self.verbose: print('Opening WAV file...', flush=True)
+        self.fh = open(self.filename, 'rb')
+        try:
+            import mmap
+            self.full_buffer = mmap.mmap(self.fh.fileno(), 0, access=mmap.ACCESS_READ)
+            if self.verbose: print('...mapped ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+        except Exception as e:
+            print('WARNING: Problem using mmap (' + str(e) +') - falling back to reading whole file...', flush=True)
+            self.full_buffer = self.fh.read()
+            if self.verbose: print('...read ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+
+
     def _parse_header(self):
         if self.verbose: print('Parsing WAV info...', flush=True)
         self.wav_info = _parse_wav_info(self.full_buffer)
@@ -343,6 +344,8 @@ class WavData(BaseData):
         if has_accel: axis_count += 3
         if has_gyro: axis_count += 3
         if has_mag: axis_count += 3
+        #Adding the temperature
+        if self.include_temperature: axis_count += 1
         self.labels = []
 
         if self.verbose: print('Create output...', flush=True)
@@ -361,6 +364,7 @@ class WavData(BaseData):
         if has_accel:
             if self.verbose: print('Sample data: scaling accel... ' + str(self.info['accel_scale']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = (self.raw_samples[:, self.info['accel_axis']:self.info['accel_axis']+3] + self.info['global_offset']) / self.info['global_range'] * self.info['accel_scale']
+            #self.sample_values[:, current_axis:current_axis + 3] = (self.raw_samples[:, self.info['accel_axis']:self.info['accel_axis'] + 3])
             self.labels = self.labels + ['accel_x', 'accel_y', 'accel_z']
             current_axis += 3
 
@@ -376,6 +380,19 @@ class WavData(BaseData):
             self.labels = self.labels + ['mag_x', 'mag_y', 'mag_z']
             current_axis += 3
 
+        if self.include_temperature:
+            # Extract temperature
+            if self.verbose: print('Temperature creation...', flush=True)
+            self.sample_values[:, current_axis] = (self.raw_samples[:, self.info['aux_axis']])
+            self.labels = self.labels + ['aux_axis']
+            tempvals = range(2, len(self.sample_values[:, current_axis]), self.get_sample_rate())
+            # temp = (double(bitand(1023,data(3:sf:end,auxch))).*75000/256-50000)./1000;
+            temp = np.array(self.sample_values[tempvals, current_axis])
+            self.temperature = ((np.bitwise_and(temp.astype(int), 1023)) * 75000 / 256 - 50000) / 1000
+            # Fixing the problem with the first 10-12 seconds data
+            self.temperature[0:11] = self.temperature[12]
+            current_axis += 1
+
         del self.raw_samples
         self.samples = None
         if self.verbose: print('Interpreted data', flush=True)
@@ -384,7 +401,7 @@ class WavData(BaseData):
             raise Exception('Internal error: not all output axes accounted for')
 
 
-    def __init__(self, filename, verbose=False, include_time=True, include_accel=True, include_gyro=True, include_mag=True):
+    def __init__(self, filename, verbose=False, include_time=True, include_accel=True, include_gyro=True, include_mag=True, include_temperature=True):
         """
         Construct a timeseries movement data object from a multi-channel .WAV file (with metadata for channel scaling).
 
@@ -401,8 +418,10 @@ class WavData(BaseData):
         self.include_accel = include_accel
         self.include_gyro = include_gyro
         self.include_mag = include_mag
+        self.include_temperature = include_temperature
 
         self.fh = None
+        self.full_buffer = None
 
         self.all_data_read = False
         self._read_data()
@@ -440,6 +459,16 @@ class WavData(BaseData):
         self._ensure_all_data_read()
         return self.sample_values
 
+    def get_temperature_values(self):
+        """
+        Get the temperature values as a single ndarray.
+
+        :returns: An ndarray of (temperature)
+                  where 'time' is in seconds since the epoch.
+        """
+        self._ensure_all_data_read()
+        return self.temperature
+
     def get_samples(self, use_datetime64=True):
         """
         Return an DataFrame for (time, accel_x, accel_y, accel_z) or (time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
@@ -475,6 +504,15 @@ class WavData(BaseData):
     def get_num_samples(self):
         return self.info['num_samples']
 
+    def get_global_range(self):
+        return self.info['global_range']
+
+    def get_global_offset(self):
+        return self.info['global_offset']
+
+    def get_scale(self):
+        return self.info['accel_scale']
+
 
 
 
@@ -483,7 +521,7 @@ def main():
     #filename = '../../../_local/data/sample.wav'
 
     with WavData(filename, verbose=True, include_gyro=True) as wav_data:
-        sample_values = wav_data.get_sample_values()
+        sample_values = wav_data.get_temperature_values()
         samples = wav_data.get_samples()
 
     print(sample_values)

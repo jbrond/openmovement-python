@@ -78,7 +78,6 @@ def _checksum(data):
 
 def _dword_unpack(value):
     """Unpack a single DWORD-packed triaxial value"""
-    # if using 0x3ff we include the leas significant bit with 0x3fe its excluded
     # eezzzzzz zzzzyyyy yyyyyyxx xxxxxxxx
     exponent = value >> 30
     x = ((((value      ) & 0x3ff) ^ 0x0200) - 0x0200) << exponent
@@ -299,6 +298,9 @@ def _parse_cwa_data(block, extractData=False):
             
             data['timestampTime'] = _timestamp_string(data['timestamp'])
 
+            # Estimate the time of the first/after-last sample (if at the configured rate)
+            data['estimatedFirstSampleTime'] = timestamp - (timestampOffset / frequency)
+            
             # Maximum samples per sector
             channels = (numAxesBPS >> 4) & 0x0f
             bytesPerAxis = numAxesBPS & 0x0f
@@ -313,10 +315,6 @@ def _parse_cwa_data(block, extractData=False):
             data['bytesPerSample'] = bytesPerSample
             data['samplesPerSector'] = samplesPerSector
 
-            # Estimate the time of the first/after-last sample (if at the configured rate)
-            data['estimatedFirstSampleTime'] = timestamp - (timestampOffset / frequency)
-            data['estimatedAfterLastSampleTime'] = data['estimatedFirstSampleTime'] + (samplesPerSector / frequency)
-            
             # Axes
             accelAxis = -1
             gyroAxis = -1
@@ -372,13 +370,13 @@ def _parse_cwa_data(block, extractData=False):
                     if bytesPerAxis == 0 and channels == 3:
                         for i in range(data['sampleCount']):
                             ofs = 30 + i * 4
-                            #value =  block[i] | (block[i + 1] << 8) | (block[i + 2] << 16) | (block[i + 3] << 24)
+                            #value =  block[i] | (block[i + 1] << 8) | (block[i + 2] << 8) | (block[i + 3] << 24)
                             value = unpack('<I', block[ofs:ofs + 4])[0]
                             axes = _dword_unpack(value)
                             accelSamples[i][0] = axes[0] / accelUnit
                             accelSamples[i][1] = axes[1] / accelUnit
                             accelSamples[i][2] = axes[2] / accelUnit
-                    elif bytesPerAxis == 2:
+                    elif bytesPerSample == 2:
                         for i in range(data['sampleCount']):
                             ofs = 30 + (i * 2 * channels) + 2 * accelAxis
                             accelSamples[i][0] = (block[ofs + 0] | (block[ofs + 1] << 8)) / accelUnit
@@ -386,7 +384,7 @@ def _parse_cwa_data(block, extractData=False):
                             accelSamples[i][2] = (block[ofs + 4] | (block[ofs + 5] << 8)) / accelUnit
                     data['samplesAccel'] = accelSamples
                 
-                if gyroAxis >= 0 and bytesPerAxis == 2:
+                if gyroAxis >= 0 and bytesPerSample == 2:
                     gyroSamples = [[0, 0, 0]] * data['sampleCount']
                     for i in range(data['sampleCount']):
                         ofs = 30 + (i * 2 * channels) + 2 * gyroAxis
@@ -395,7 +393,7 @@ def _parse_cwa_data(block, extractData=False):
                         gyroSamples[i][2] = (block[ofs + 4] | (block[ofs + 5] << 8)) / gyroUnit
                     data['samplesGyro'] = gyroSamples
                 
-                if magAxis >= 0 and bytesPerAxis == 2:
+                if magAxis >= 0 and bytesPerSample == 2:
                     magSamples = [[0, 0, 0]] * data['sampleCount']
                     for i in range(data['sampleCount']):
                         ofs = 30 + (i * 2 * channels) + 2 * magAxis
@@ -414,6 +412,19 @@ class CwaData(BaseData):
     """
     CWA file loader
     """
+
+    def _read_data(self):
+        if self.verbose: print('Opening CWA file...', flush=True)
+        self.fh = open(self.filename, 'rb')
+        try:
+            import mmap
+            self.full_buffer = mmap.mmap(self.fh.fileno(), 0, access=mmap.ACCESS_READ)
+            if self.verbose: print('...mapped ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+        except Exception as e:
+            print('WARNING: Problem using mmap (' + str(e) +') - falling back to reading whole file...', flush=True)
+            self.full_buffer = self.fh.read()
+            if self.verbose: print('...read ' + str(len(self.full_buffer) / 1024 / 1024) + 'MB', flush=True)
+
 
     def _parse_header(self):
         if self.verbose: print('Parsing header...', flush=True)
@@ -436,7 +447,6 @@ class CwaData(BaseData):
 
 
     def _parse_data(self):
-        report = {}
         if self.verbose: print('Interpreting data...', flush=True)
         self.data_buffer = self.full_buffer[self.data_offset:]
 
@@ -483,12 +493,7 @@ class CwaData(BaseData):
         # Valid sectors: zero checksum, correct header and packet-length, matching initial data format (numAxesBPS and rateCode)
         if self.verbose: print('Determining valid sectors...', flush=True)
         self.df['valid_sector'] = ((self.df.checksum_sum == 0) & (self.df.packet_header == 22593) & (self.df.packet_length == 508) & (self.df.num_axes_bps == self.data_format['numAxesBPS']) & (self.df.rate_code == self.data_format['rateCode']))
-        report['sector_count'] = self.df.shape[0]
-        report['valid_sector_count'] = self.df.valid_sector.sum()
-        report['invalid_sector_count'] = report['sector_count'] - report['valid_sector_count']
-        if self.verbose: print('Invalid sectors: ' + str(report['invalid_sector_count']) + ' (Valid: '  + str(report['valid_sector_count']) + ' / ' + str(report['sector_count']) + ')', flush=True)
-
-        return report
+        #print(self.df.valid_sector)
 
 
     def _parse_times(self):
@@ -519,49 +524,24 @@ class CwaData(BaseData):
 
 
     def _find_segments(self):
-        if self.verbose: print('Finding segments...', flush=True)
-        all_segments = []
-
-        # Last sector in a segment where the session_id/config changes, or the sequence does not follow on, or the next sector is invalid.
-        ends = np.where((self.df.valid_sector.diff(periods=-1) != 0) | (self.df.session_id.diff(periods=-1) != 0) | (self.df.num_axes_bps.diff(periods=-1)  != 0) | ((-self.df.sequence_id).diff(periods=-1) != 1))[0]
-        
-        previous_fixed_samples = 0
-        previous_true_samples = 0
-
-        segment_start = 0
-        for end in ends:
-            segment = {}
-
-            # Slice (sector index)
-            segment['slice'] = slice(segment_start, end + 1)
-
-            # First sector of slice
-            ofs = self.data_offset + segment_start * SECTOR_SIZE
-            segment['start'] = _parse_cwa_data(self.full_buffer[ofs:ofs + SECTOR_SIZE])
-
-            # Last sector of slice
-            ofs = self.data_offset + end * SECTOR_SIZE
-            segment['end'] = _parse_cwa_data(self.full_buffer[ofs:ofs + SECTOR_SIZE])
-
-            # Current implementation assumes format is fixed for all segments
-            segment['index_fixed'] = previous_fixed_samples
-            previous_fixed_samples += (end + 1 - segment_start) * self.data_format['samplesPerSector']
-            segment['count_fixed'] = previous_fixed_samples - segment['index_fixed']
-
-            # Future implementation could allow per-segment format differences
-            segment['index_true'] = previous_true_samples
-            previous_true_samples += (end - segment_start) * segment['start']['samplesPerSector'] + segment['end']['sampleCount']
-            segment['count_true'] = previous_true_samples - segment['index_true']
- 
-            all_segments.append(segment)
-            segment_start = end + 1
-
-        if self.verbose: print('...segments located', flush=True)
-        if self.verbose: print(str(all_segments), flush=True)
-        #if self.verbose: print(str(self.df.iloc[all_segments[0]]))
-
         # TODO: Segments not yet used.  Possibly return as raw sample ranges: scale by self.data_format.data['samplesPerSector']  -- Masked array/numpy.compress()/numpy.take()?
-        return all_segments
+        pass
+
+        # if self.verbose: print('Finding segments...', flush=True)
+        # self.all_segments = []
+
+        # # Last sector in a segment where the session_id/config changes, or the sequence does not follow on, or the next sector is invalid.
+        # ends = np.where((self.df.valid_sector.diff(periods=-1) != 0) | (self.df.session_id.diff(periods=-1) != 0) | (self.df.num_axes_bps.diff(periods=-1)  != 0) | ((-self.df.sequence_id).diff(periods=-1) != 1))[0]
+        
+        # segment_start = 0
+        # for end in ends:
+        #     segment = slice(segment_start, end + 1)
+        #     self.all_segments.append(segment)
+        #     segment_start = end + 1
+
+        # if self.verbose: print('...segments located', flush=True)
+        # if self.verbose: print(str(self.all_segments), flush=True)
+        # #print(str(self.df.iloc[self.all_segments[0]]))
 
 
     def _interpret_samples(self):
@@ -591,16 +571,16 @@ class CwaData(BaseData):
             raise Exception('Unhandled data format')
 
         # Which sensors?
-        self.has_accel = self.include_accel and 'accelAxis' in self.data_format and self.data_format['accelAxis'] >= 0
-        self.has_gyro = self.include_gyro and 'gyroAxis' in self.data_format and self.data_format['gyroAxis'] >= 0
-        self.has_mag = self.include_mag and 'magAxis' in self.data_format and self.data_format['magAxis'] >= 0
+        has_accel = self.include_accel and 'accelAxis' in self.data_format and self.data_format['accelAxis'] >= 0
+        has_gyro = self.include_gyro and 'gyroAxis' in self.data_format and self.data_format['gyroAxis'] >= 0
+        has_mag = self.include_mag and 'magAxis' in self.data_format and self.data_format['magAxis'] >= 0
         
         # Calculate dimensions
         axis_count = 0  # time
         if self.include_time: axis_count += 1
-        if self.has_accel: axis_count += 3
-        if self.has_gyro: axis_count += 3
-        if self.has_mag: axis_count += 3
+        if has_accel: axis_count += 3
+        if has_gyro: axis_count += 3
+        if has_mag: axis_count += 3
         if self.include_light: axis_count += 1
         if self.include_temperature: axis_count += 1
         self.labels = []
@@ -626,29 +606,26 @@ class CwaData(BaseData):
                     if self.verbose: print('Timestamp interpolate... extrapolate to start', flush=True)
                     deltaTime = self.df['timestamp'][1] - self.df['timestamp'][0]
                     deltaRate = deltaTime / deltaIndex
-                    #self.df['timestamp'][0] -= deltaRate * self.df['timestamp_index'][0]
-                    self.df.loc[0, 'timestamp'] -= deltaRate * self.df['timestamp_index'][0]
-                    #self.df['timestamp_index'][0] = 0
-                    self.df.loc[0, 'timestamp_index'] = 0
+                    self.df.loc[0,'timestamp'] -= deltaRate * self.df['timestamp_index'][0]
+                    self.df.loc[0,'timestamp_index'] = 0
 
             self.sample_values[:,current_axis] = np.interp(np.arange(0, self.df.shape[0] * self.data_format['sampleCount']), self.df['timestamp_index'], self.df['timestamp'])
             self.labels = self.labels + ['time']
             current_axis += 1
 
-        if self.has_accel:
+        if has_accel:
             if self.verbose: print('Sample data: scaling accel... 1/' + str(self.data_format['accelUnit']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = self.raw_samples[:, self.data_format['accelAxis']:self.data_format['accelAxis']+3] * (1.0 / self.data_format['accelUnit'])
-            
             self.labels = self.labels + ['accel_x', 'accel_y', 'accel_z']
             current_axis += 3
 
-        if self.has_gyro:
+        if has_gyro:
             if self.verbose: print('Sample data: scaling gyro... 1/' + str(self.data_format['gyroUnit']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = self.raw_samples[:, self.data_format['gyroAxis']:self.data_format['gyroAxis']+3] * (1.0 / self.data_format['gyroUnit'])
             self.labels = self.labels + ['gyro_x', 'gyro_y', 'gyro_z']
             current_axis += 3
 
-        if self.has_mag:
+        if has_mag:
             if self.verbose: print('Sample data: scaling mag... 1/' + str(self.data_format['magUnit']), flush=True)
             self.sample_values[:,current_axis:current_axis+3] = self.raw_samples[:, self.data_format['magAxis']:self.data_format['magAxis']+3] * (1.0 / self.data_format['magUnit'])
             self.labels = self.labels + ['mag_x', 'mag_y', 'mag_z']
@@ -667,6 +644,7 @@ class CwaData(BaseData):
             self.sample_values[:,current_axis] = np.interp(np.arange(0, self.df.shape[0] * self.data_format['sampleCount']), self.df['sample_index'], (self.df['temperature'] & 0x3ff) * (75.0 / 256) - 50)
             self.labels = self.labels + ['temperature']
             current_axis += 1
+
         
         del self.raw_samples
         self.samples = None
@@ -705,6 +683,7 @@ class CwaData(BaseData):
         self.include_temperature = include_temperature
 
         self.fh = None
+        self.full_buffer = None
 
         self.all_data_read = False
         self._read_data()
@@ -719,8 +698,8 @@ class CwaData(BaseData):
         if self.all_data_read:
             return
         self.all_data_read = True
-        self.report = self._parse_data()
-        self.all_segments = self._find_segments()
+        self._parse_data()
+        self._find_segments()
         self._interpret_samples()
 
         elapsed_time = time.time() - start_time
@@ -751,6 +730,16 @@ class CwaData(BaseData):
         """
         self._ensure_all_data_read()
         return self.sample_values
+
+    def get_temperature_values(self):
+        """
+        Get the temperature values as a single ndarray.
+
+        :returns: An ndarray of (temperature)
+                  where 'time' is in seconds since the epoch.
+        """
+        self._ensure_all_data_read()
+        return self.temperature
 
     def get_samples(self, use_datetime64=True):
         """
@@ -817,7 +806,7 @@ def main():
     #filename = '../../../_local/data/AX6-Static-8-Day.cwa'
     #filename = '../../../_local/data/longitudinal_data.cwa'
     with CwaData(filename, verbose=True, include_gyro=False, include_temperature=True) as cwa_data:
-        sample_values = cwa_data.get_sample_values()
+        sample_values = cwa_data.get_temperature_values()
         samples = cwa_data.get_samples()
         
     print(sample_values)

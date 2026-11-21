@@ -12,41 +12,25 @@ from openmovement.load import MultiData
 def run_sensors(source_file):
     ext = '.sensors.csv'
 
-    include_gyro = True
-    with MultiData(source_file, verbose=True, include_gyro=include_gyro, include_light=True, include_temperature=True) as data:
-        samples = data.get_sample_values()
-   
-    #print(samples)
-    output_lines = 0
+    with MultiData(source_file, verbose=True, include_gyro=False, include_light=True, include_temperature=True) as data:
+        samples = data.get_temperature_values()
+    
+    print(samples)
 
     output_file = os.path.splitext(source_file)[0] + ext
     with open(output_file, 'w') as writer:
-        if include_gyro:
-            writer.write("Time,AccelX,AccelY,AccelZ,GyroX,GyroY,GyroZ,Light,Temp\n")
-            for time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, light, temp in samples:
-                time_string = datetime.datetime.fromtimestamp(time, tz=datetime.timezone.utc).isoformat(sep=' ', timespec='milliseconds')[0:23]
-                line = time_string + "," + str(accel_x) + "," + str(accel_y) + "," + str(accel_z) + "," + str(gyro_x) + "," + str(gyro_y) + "," + str(gyro_z) + "," + str(light) + "," + str(temp)
-                writer.write(line + "\n")
-                #print(line)
-                output_lines += 1
-        else:
-            writer.write("Time,AccelX,AccelY,AccelZ,Light,Temp\n")
-            for time, accel_x, accel_y, accel_z, light, temp in samples:
-                time_string = datetime.datetime.fromtimestamp(time, tz=datetime.timezone.utc).isoformat(sep=' ', timespec='milliseconds')[0:23]
-                line = time_string + "," + str(accel_x) + "," + str(accel_y) + "," + str(accel_z) + "," + str(light) + "," + str(temp)
-                writer.write(line + "\n")
-                #print(line)
-                output_lines += 1
-    
-    print("Wrote " + str(output_lines) + " lines to " + output_file)
+        writer.write("Time,AccelX,AccelY,AccelZ,Light,Temp\n")
+        for time, accel_x, accel_y, accel_z, light, temp in samples:
+            time_string = datetime.datetime.fromtimestamp(time, tz=datetime.timezone.utc).isoformat(sep=' ', timespec='milliseconds')[0:23]
+            line = time_string + "," + str(accel_x) + "," + str(accel_y) + "," + str(accel_z) + "," + str(light) + "," + str(temp)
+            writer.write(line + "\n")
+
+            print(line)
 
 
 if __name__ == "__main__":
     source_files = None
-    source_files = [
-        './_local/data/AX6-Sample.cwa',
-        #'./_local/data/sample.cwa',
-    ]
+    source_files = ['../_local/data/sample.cwa']
 
     if len(sys.argv) > 1:
         source_files = sys.argv[1:]
